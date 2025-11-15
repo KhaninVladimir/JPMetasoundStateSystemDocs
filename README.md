@@ -1,205 +1,210 @@
-# JPMetasoundStateSystemDocs
+# Metasound State Machine Plugin
 
-Universal MetaSound state system for Unreal Engine 5 that lets you drive audio behavior using @global enum-based states** and **global key–value parameters**, controlled from **Blueprints** and read directly inside **MetaSound** graphs.
-
-> **TL;DR**: Define an enum (Blueprint or C++). Set its value globally at runtime. In MetaSound, drop a dynamic node (built from your enum) to route/select/trigger behavior automatically as states change.
+A lightweight and powerful **Enum-driven State System** for Unreal Engine MetaSounds.  
+Supports both **Global** and **Component-Scoped** state logic, dynamic Enum-based MetaSound nodes, and RTPC-style global values.  
+Includes simple debugging tools.
 
 ---
 
 ## Features
 
-* **Global enum state store**
-
-  * Accepts **Blueprint** and **C++** enums
-  * Values are stored globally by **enum type name**
-  * Safe to query from any MetaSound graph at runtime
-
-* **Dynamic MetaSound nodes** (generated from your enum)
-
-  * **Router** – keeps output linked while sound plays; reroutes automatically when the global enum value changes
-  * **Selector** – outputs the value at the moment a logic Gate is triggered
-  * **Trigger Switcher** – behaves like a classic switch on incoming triggers
-  * **GetGlobalValue** – reads a global value by string key (non-enum key–value store)
-
-* **Blueprint utility nodes**
-
-  * **Set Global MetaSound State Value** – set a new value for any enum type
-  * **Get/Set MetaSound Global Value** – string-keyed global value API for custom parameters
-
-* **Works with your pipeline**
-
-  * Designed for UE 5.6+
-  * Lightweight runtime module; editor helpers optional
+- **Global State**: One shared Enum state for the entire game (music, UI, ambience).
+- **Component State**: Per-`UAudioComponent` Enum state; perfect for weapons, characters, objects.
+- **Dynamic MetaSound Nodes**: Router, Selector, Trigger Switcher, GetGlobalValue.
+- **Global Custom Values**: Float/int/bool values stored by string key (RTPC-like).
+- **Blueprint Integration**: Set/Read global and component states from Blueprint.
+- **Debugging**:  
+  - `jp.audio.debug.log`  
+  - `jp.audio.debug.print`
 
 ---
 
-## Supported Unreal Versions & Platforms
+## Table of Contents
 
-* **Engine**: UE 5.6 (primary).
-* **Platforms**: Windows, macOS, Android, iOS (runtime code is platform-agnostic; MetaSound availability may vary by platform).
-
-> If you ship to consoles, the core pattern stays the same; confirm MetaSound feature parity on your target SDK.
-
----
-
-## Modules
-
-> Replace placeholders with your actual module names if they differ.
-
-| Module                     | Type    | Description                                  |
-| -------------------------- | ------- | -------------------------------------------- |
-| `JPMetaSoundLibrary`       | Runtime | Core state system & MetaSound node factories |
-| `JPMetaSoundLibraryEditor` | Editor  | (Optional) Editor utilities / asset tools    |
-
----
-
-## Quick Start
-
-### 1) Create an Enum (Blueprint or C++)
-
-Define a gameplay state enum that will drive audio. You may use either a **Blueprint** enum or a **C++** `UENUM(BlueprintType)`.
-
-**Example enum values**: `Exploration`, `Combat`, `Pause`, `Cinematic`.
-
-> The plugin identifies your enum by its **type name**. Keep names stable across refactors.
-
-### 2) Set the Global State (Blueprint)
-
-Use the Blueprint node **Set Global MetaSound State Value**:
-
-* **Enum Type**: pick your enum asset or C++ enum type
-* **New Value**: the value you want to broadcast globally
-* Call it whenever your game state changes (e.g., entering combat, pausing, etc.)
-
-### 3) Read the State in MetaSound
-
-Open your MetaSound graph and add one of the dynamic nodes. Each node is generated based on the **enum type** you select.
-
-* **Router**
-
-  * After you trigger its *Gate In*, it keeps the chosen output path active while the sound exists.
-  * If the **global enum value changes**, the Router **automatically reroutes** to the new output without restarting the sound.
-
-* **Selector**
-
-  * When you pulse *Gate In*, it **samples** the current global enum value and outputs the matching branch **once**.
-
-* **Trigger Switcher**
-
-  * Works like a **classic switch** for incoming triggers. Each enum value maps to a trigger output.
-
-* **GetGlobalValue**
-
-  * Reads a **string-keyed** global value (non-enum). Use this for flexible parameters you want to drive from Blueprint or C++.
-
-### 4) Custom Global Values (Non-Enum)
-
-Use Blueprint nodes **Get/Set MetaSound Global Value** to read/write values by **key**. In MetaSound, use **GetGlobalValue** to consume them.
-
-> Useful for RTPC-like behaviors (e.g., `MusicIntensity`, `LowPassAmount`) without tying them to enums.
+1. [Concept Overview](#concept-overview)  
+2. [Blueprint Nodes](#blueprint-nodes)  
+   - [Set Global State](#1-set-global-state)  
+   - [Set Component State](#2-set-component-state)  
+   - [Set/Get Global Value](#3-setget-global-value)  
+3. [MetaSound Nodes](#metasound-nodes)  
+   - [Router](#1-router)  
+   - [Selector](#2-enum-selector)  
+   - [Trigger Switcher](#3-trigger-switcher)  
+   - [GetGlobalValue](#4-getglobalvalue)  
+4. [Quick Tutorials](#quick-tutorials)  
+   - [Global Music State](#global-music-state)  
+   - [Per-Component Weapon State](#per-component-weapon-state)  
+5. [Debugging](#debugging)
 
 ---
 
-## Usage Patterns
+## Concept Overview
 
-### Continuous State-Driven Music
+The plugin provides a unified system for managing audio states inside MetaSounds using **Enums**.
 
-* Set `MusicState` globally when gameplay shifts (Exploration → Combat).
-* In your music MetaSound, use **Router** to sustain the current layer and **auto-reroute** when the state changes, crossfading or blending as needed in the graph.
+### Global State
 
-### One-Shot UI Sounds
+- Defines one Enum value shared by the whole project.
+- All MetaSounds listening to the same Enum see the same value.
+- Ideal for music states, UI pages, ambience modes.
 
-* Use **Selector** to pick the correct clip on a button press, sampling the UI mode state (e.g., `Settings`, `Store`, `Inventory`).
+### Component State
 
-### Trigger Fan-Out
+- State is linked to a specific `UAudioComponent`.
+- Each sound source can have an independent state.
+- Perfect for characters, weapons, interactable objects.
 
-* With **Trigger Switcher**, feed a single trigger and branch to different SFX families depending on the state (e.g., weapon categories).
+### Global Values
 
-### Parameter Feeds
-
-* Write `Stamina01` or `Heat` by key using **Set MetaSound Global Value** from gameplay code; read it in MetaSound with **GetGlobalValue** to modulate filters, gains, etc.
-
----
-
-## Best Practices
-
-* **Keep enum types stable**: The system keys the storage by **enum type name**; renaming types can break lookups.
-* **Blueprint & C++ parity**: Prefer `UENUM(BlueprintType)` for C++ enums so the same enum can be selected in Blueprints and MetaSound node pickers.
-* **Centralize state writes**: Encapsulate state transitions in a single subsystem or manager to avoid race conditions.
-* **Threading**: MetaSound graphs may read while gameplay writes; avoid rapid oscillations without debouncing or smoothing in your graph logic.
-* **Value keys**: For the string-keyed store, define constants to avoid typos (`"MusicIntensity"` vs `"musicIntensity"`).
+- Non-Enum values stored by a string key.
+- Behave like RTPC parameters.
+- Useful for continuous control (volume, filters, intensity, etc.).
 
 ---
 
-## API Overview
+## Blueprint Nodes
 
-> The exact C++ class and function names can differ per version. Blueprint usage is canonical for stability. If you expose C++ helpers, document them here.
+### 1. Set Global State
 
-### Blueprint Nodes
-
-* **Set Global MetaSound State Value**
-
-  * Inputs: `EnumType`, `NewValue`
-  * Effect: Updates the global enum store for that type
-
-* **Get MetaSound Global Value** / **Set MetaSound Global Value**
-
-  * Inputs: `Key` (String), `Value` (variant/number/string as implemented)
-  * Effect: Reads/writes a string-keyed global parameter
-
-### MetaSound Nodes
-
-* **Router (Enum-Driven)**
-* **Selector (Enum-Driven)**
-* **Trigger Switcher (Enum-Driven)**
-* **GetGlobalValue (Key-Driven)**
+Set Enum value in **global storage**.
 
 ---
 
-## Example Blueprint Flow
+### 2. Set Component State
 
-1. On game state change, call **Set Global MetaSound State Value** with enum `EMusicState = Combat`.
-2. In your `Music_Master` MetaSound, the **Router** node re-routes to the *Combat* branch at runtime.
-3. Use crossfades or filters inside the graph for seamless transitions.
-
----
-
-## Example Enum (C++)
-
-```cpp
-// Define a gameplay enum usable in Blueprints and MetaSound selections
-UENUM(BlueprintType)
-enum class EGamePhase : uint8
-{
-    Exploration UMETA(DisplayName = "Exploration"),
-    Combat      UMETA(DisplayName = "Combat"),
-    Pause       UMETA(DisplayName = "Pause"),
-    Cinematic   UMETA(DisplayName = "Cinematic")
-};
-```
-
-> Set this enum from Blueprint using **Set Global MetaSound State Value**. The MetaSound nodes generated from `EGamePhase` will then react to your changes.
+Set Enum value **for a specific Audio Component**.
+> Only affects MetaSounds executed by this specific `UAudioComponent`.
 
 ---
 
-## Replication & Networking
+### 3. Set/Get Global Value
 
-* The global store itself is engine-process local. For multiplayer, **replicate your authoritative state** (e.g., via a GameState/Subsystem) and write to the global store **on the client** that should hear the change.
-* Keep server-authoritative logic clean: replicate enum values, not audio graph details.
+RTPC-style value storage for MetaSounds.
 
----
+- **Set Metasound Global Value**  
+  Stores float/int/bool under a string key.
 
-## Performance Notes
-
-* Reads inside MetaSound are lightweight. The **Router** listens for changes and updates its routing without tearing down the graph.
-* Avoid excessively high-frequency writes to the same key/enum; consider debouncing.
+- **Get Metasound Global Value**  
+  Reads the stored value.
 
 ---
 
-## Limitations
+## MetaSound Nodes
 
-* Renaming enum **types** changes the storage key; migrate carefully.
-* Dynamic node menus list only **BlueprintType** enums and known C++ enums.
-* String-keyed values are not type-enforced unless your project wraps accessors with typed helpers.
+### 1. Router
 
+Listens for Enum changes and fires trigger outputs.
 
+**Behavior:**
+
+- `GateIn` starts monitoring.
+- When state changes → fires the output matching the new Enum value.
+- Can operate in Global or Component scope (depending on node variant or settings).
+
+**Use Cases:**
+
+- Music layer switching  
+- UI theme changes  
+- Dynamic ambience states  
+
+---
+
+### 2. Enum Selector
+(float, FTime, bool, int32, FWaveAsset)
+Outputs a value based on current Enum state when triggered.
+
+**Use Cases:**
+
+- Selecting mix levels  
+- Picking filter/resonance per state  
+- Mapping state → numeric parameter  
+
+---
+
+### 3. Trigger Switcher
+
+MetaSound equivalent of “Switch on Enum”.
+
+**Behavior:**
+
+- On `GateIn`, fires exactly **one** output that matches the current Enum.
+
+**Use Cases:**
+
+- One-shot stingers  
+- Selective SFX triggers  
+- State-driven transitions  
+
+---
+
+### 4. GetGlobalValue
+
+Reads a float/int/bool stored by `Set Metasound Global Value`.
+
+**Use Cases:**
+
+- Continuous gameplay-driven parameters  
+- Intensity curves  
+- Player-dependent mix changes  
+
+---
+
+## Quick Tutorials
+
+### Global Music State
+
+1. Create enum `EGameMusicState` with:  
+   `Menu`, `Exploration`, `Combat`.
+
+2. In Blueprint:
+
+   - On menu:  
+     `Set Global Metasound State → Menu`
+   - On gameplay:  
+     `Set Global Metasound State → Exploration`
+   - On combat:  
+     `Set Global Metasound State → Combat`
+
+3. In MetaSound:
+
+   - Add **Router** with `EGameMusicState`.
+   - Connect `On_Menu`, `On_Exploration`, `On_Combat` to the appropriate music sections.
+   - Trigger `GateIn` on start.
+
+---
+
+### Per-Component Weapon State
+
+1. Create enum `EWeaponState`:  
+   `Idle`, `Firing`, `Reload`.
+
+2. In weapon Blueprint:
+
+   - Call **Set Component Metasound State**.
+   - Pass the weapon’s `AudioComponent`.
+   - Set values based on weapon logic (Idle, Firing, Reload).
+
+3. In the weapon’s MetaSound:
+
+   - Use Router/Selector bound to **Component** state.
+   - Each weapon instance behaves independently.
+
+---
+
+## Debugging
+
+Two debugging modes are available:
+
+### `jp.audio.debug.log`
+
+Prints detailed state changes to the Output Log.
+
+### `jp.audio.debug.print`
+
+Shows on-screen debug messages with current state and updates.
+
+Use them to verify:
+
+- Global and Component state changes  
+- Router and Selector reactions  
+- Current values and keys
