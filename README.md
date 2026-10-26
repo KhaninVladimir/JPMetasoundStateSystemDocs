@@ -4,6 +4,14 @@ A lightweight and powerful **Enum-driven State System** for Unreal Engine MetaSo
 Supports both **Global** and **Component-Scoped** state logic, dynamic Enum-based MetaSound nodes, and RTPC-style global values.  
 Includes simple debugging tools.
 
+Current source target: **Unreal Engine 5.8**, plugin **1.2.1**.
+See the [UE 5.8 migration notes](Documentation/UE58Migration.md) for operator reset,
+state lifetime, Blueprint expansion fixes, compatibility limits, and pending tests.
+
+[Fab product](https://www.fab.com/listings/ca1f6d8e-ca84-4625-914d-6b051aa630b9)
+| [Video guide](https://youtu.be/rc-5LBSxPsI)
+| [Support](https://github.com/KhaninVladimir/JPMetasoundStateSystemDocs/issues)
+
 ---
 
 ## Features
@@ -11,7 +19,7 @@ Includes simple debugging tools.
 - **Global State**: One shared Enum state for the entire game (music, UI, ambience).
 - **Component State**: Per-`UAudioComponent` Enum state; perfect for weapons, characters, objects.
 - **Dynamic MetaSound Nodes**: Router, Selector, Trigger Switcher, GetGlobalValue.
-- **Global Custom Values**: Float/int/bool values stored by string key (RTPC-like).
+- **Global Custom Values**: Float values stored by name; integers and booleans can be represented numerically.
 - **Blueprint Integration**: Set/Read global and component states from Blueprint.
 - **Debugging**:  
   - `jp.audio.debug.log`  
@@ -44,7 +52,7 @@ The plugin provides a unified system for managing audio states inside MetaSounds
 
 ### Global State
 
-- Defines one Enum value shared by the whole project.
+- Defines one Enum value shared process-wide, including multiple PIE worlds.
 - All MetaSounds listening to the same Enum see the same value.
 - Ideal for music states, UI pages, ambience modes.
 
@@ -53,6 +61,8 @@ The plugin provides a unified system for managing audio states inside MetaSounds
 - State is linked to a specific `UAudioComponent`.
 - Each sound source can have an independent state.
 - Perfect for characters, weapons, interactable objects.
+- State is keyed to the current playback. Start Play, then set the component state;
+  set it again for each new playback. Cached operators rebind on Reset.
 
 ### Global Values
 
@@ -82,7 +92,7 @@ Set Enum value **for a specific Audio Component**.
 RTPC-style value storage for MetaSounds.
 
 - **Set Metasound Global Value**  
-  Stores float/int/bool under a string key.
+  Stores a float under a name key (use numeric values for integer/boolean semantics).
 
 - **Get Metasound Global Value**  
   Reads the stored value.
@@ -111,7 +121,8 @@ Listens for Enum changes and fires trigger outputs.
 
 ### 2. Enum Selector
 (float, FTime, bool, int32, FWaveAsset)
-Outputs a value based on current Enum state when triggered.
+Continuously outputs the selected input once per audio block. The Gate pin is
+retained for existing asset compatibility and does not gate this selector.
 
 **Use Cases:**
 
@@ -139,7 +150,8 @@ MetaSound equivalent of “Switch on Enum”.
 
 ### 4. GetGlobalValue
 
-Reads a float/int/bool stored by `Set Metasound Global Value`.
+Reads the float stored by `Set Metasound Global Value` when Gate triggers, then
+holds the result. Connect a repeating trigger when repeated sampling is needed.
 
 **Use Cases:**
 
@@ -180,6 +192,7 @@ Reads a float/int/bool stored by `Set Metasound Global Value`.
 
 2. In weapon Blueprint:
 
+   - Start the AudioComponent with **Play**.
    - Call **Set Component Metasound State**.
    - Pass the weapon’s `AudioComponent`.
    - Set values based on weapon logic (Idle, Firing, Reload).
@@ -188,6 +201,11 @@ Reads a float/int/bool stored by `Set Metasound Global Value`.
 
    - Use Router/Selector bound to **Component** state.
    - Each weapon instance behaves independently.
+
+Use consecutive, zero-based Enum values matching the generated pin order and
+unique enum asset names. Sparse native Enum values and hidden entries that alter
+the ordering require separate mapping support; this migration retains the existing
+index representation.
 
 ---
 
